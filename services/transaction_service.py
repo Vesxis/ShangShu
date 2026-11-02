@@ -1,0 +1,43 @@
+from core.exceptions import (
+    ClientNotFoundError,
+    InsufficientPermissionsError,
+    TransactionNotFound,
+)
+from database.unit_of_work import UnitOfWork
+from models.models import Client, Transaction
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+class TransactionService:
+
+    @staticmethod
+    async def get_transaction(transaction_id: int, current_client: Client) -> Transaction:
+        async with UnitOfWork() as uow:
+            transaction = await uow.transaction.get_transaction(transaction_id)
+            if not transaction:
+                logger.warning("transaction_not_found", extra={"extra_fields": {"transaction_id": transaction_id}})
+                raise TransactionNotFound()
+            if transaction.client_fk != current_client.id:
+                raise InsufficientPermissionsError(required_role="owner", client_role="client")
+            return transaction
+
+    @staticmethod
+    async def client_all_transactions(
+        client_id: int, current_client: Client, limit: int = 10, offset: int = 0
+    ) -> list[Transaction]:
+        async with UnitOfWork() as uow:
+            client = await uow.client.get_client(client_id)
+            if client is None:
+                raise ClientNotFoundError(client_id)
+            if client.id != current_client.id:
+                raise InsufficientPermissionsError(required_role="owner", client_role="client")
+            return await uow.transaction.get_client_transactions(client_id, limit, offset)
+
+    @staticmethod
+    async def get_my_transactions(
+        current_client: Client, limit, offset
+    ) -> list[Transaction]:
+        async with UnitOfWork() as uow:
+            return await uow.transaction.get_client_transactions(current_client.id, limit, offset)

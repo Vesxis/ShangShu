@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+
+      # Warnings fail too: eslint exits 0 on them, so a stray expression can
+      # slip through a green run.
+      - name: Lint
+        run: npm run lint -- --max-warnings 0
+
+      - name: Types
+        run: npx tsc --noEmit
+
+      # Builds against the default API URL; NEXT_PUBLIC_* are only baked in for
+      # a real deploy, which lives in a separate workflow.
+      - name: Build
+        run: npm run build
